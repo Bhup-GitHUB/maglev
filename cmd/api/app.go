@@ -62,7 +62,7 @@ func BuildApplication(cfg appconf.Config, gtfsCfg gtfs.Config) (*app.Application
 
 // CreateServer creates and configures the HTTP server with routes and middleware.
 // Sets up both REST API routes and WebUI routes, applies security headers, and adds request logging.
-func CreateServer(coreApp *app.Application, cfg appconf.Config) *http.Server {
+func CreateServer(coreApp *app.Application, cfg appconf.Config) (*http.Server, *restapi.RestAPI) {
 	api := restapi.NewRestAPI(coreApp)
 
 	webUI := &webui.WebUI{
@@ -91,14 +91,14 @@ func CreateServer(coreApp *app.Application, cfg appconf.Config) *http.Server {
 		ErrorLog:     slog.NewLogLogger(coreApp.Logger.Handler(), slog.LevelError),
 	}
 
-	return srv
+	return srv, api
 }
 
 // Run manages the server lifecycle with graceful shutdown.
 // Starts the server in a goroutine, waits for shutdown signals (SIGINT, SIGTERM),
 // and performs graceful shutdown with a 30-second timeout.
 // Returns an error if the server fails to start or shutdown fails.
-func Run(srv *http.Server, gtfsManager *gtfs.Manager, logger *slog.Logger) error {
+func Run(srv *http.Server, api *restapi.RestAPI, gtfsManager *gtfs.Manager, logger *slog.Logger) error {
 	logger.Info("starting server", "addr", srv.Addr)
 
 	// Set up signal handling for graceful shutdown
@@ -131,6 +131,11 @@ func Run(srv *http.Server, gtfsManager *gtfs.Manager, logger *slog.Logger) error
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		logger.Error("server forced to shutdown", "error", err)
 		return fmt.Errorf("server forced to shutdown: %w", err)
+	}
+
+	// Shutdown RestAPI (stops rate limiter cleanup goroutine)
+	if api != nil {
+		api.Shutdown()
 	}
 
 	// Shutdown GTFS manager

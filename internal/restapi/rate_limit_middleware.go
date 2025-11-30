@@ -23,7 +23,7 @@ type RateLimitMiddleware struct {
 // NewRateLimitMiddleware creates a new rate limiting middleware
 // ratePerSecond: number of requests allowed per second per API key
 // burstSize: number of requests allowed in a burst per API key
-func NewRateLimitMiddleware(ratePerSecond int, interval time.Duration) func(http.Handler) http.Handler {
+func NewRateLimitMiddleware(ratePerSecond int, interval time.Duration) *RateLimitMiddleware {
 	// Handle zero rate limit case
 	var rateLimit rate.Limit
 	if ratePerSecond <= 0 {
@@ -48,7 +48,12 @@ func NewRateLimitMiddleware(ratePerSecond int, interval time.Duration) func(http
 	// Start cleanup goroutine
 	go middleware.cleanup()
 
-	return middleware.rateLimitHandler
+	return middleware
+}
+
+// Handler returns the HTTP middleware handler function
+func (rl *RateLimitMiddleware) Handler() func(http.Handler) http.Handler {
+	return rl.rateLimitHandler
 }
 
 // getLimiter gets or creates a rate limiter for the given API key
