@@ -200,3 +200,45 @@ CREATE INDEX IF NOT EXISTS idx_stop_times_stop_id_trip_id ON stop_times (stop_id
 
 -- migrate
 CREATE INDEX IF NOT EXISTS idx_calendar_dates_service_id ON calendar_dates (service_id);
+
+-- migrate
+-- FTS5 virtual table for route full-text search
+CREATE VIRTUAL TABLE IF NOT EXISTS routes_fts USING fts5(
+    id,
+    short_name,
+    long_name,
+    content='routes',
+    content_rowid='rowid'
+);
+
+-- migrate
+CREATE TRIGGER IF NOT EXISTS routes_fts_insert_trigger AFTER INSERT ON routes BEGIN
+INSERT INTO
+    routes_fts (rowid, id, short_name, long_name)
+VALUES
+    (new.rowid, new.id, new.short_name, new.long_name);
+
+END;
+
+-- migrate
+CREATE TRIGGER IF NOT EXISTS routes_fts_delete_trigger AFTER DELETE ON routes BEGIN
+INSERT INTO
+    routes_fts (routes_fts, rowid, id, short_name, long_name)
+VALUES
+    ('delete', old.rowid, old.id, old.short_name, old.long_name);
+
+END;
+
+-- migrate
+CREATE TRIGGER IF NOT EXISTS routes_fts_update_trigger AFTER UPDATE ON routes BEGIN
+INSERT INTO
+    routes_fts (routes_fts, rowid, id, short_name, long_name)
+VALUES
+    ('delete', old.rowid, old.id, old.short_name, old.long_name);
+
+INSERT INTO
+    routes_fts (rowid, id, short_name, long_name)
+VALUES
+    (new.rowid, new.id, new.short_name, new.long_name);
+
+END;

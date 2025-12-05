@@ -4,7 +4,7 @@ run: build
 	bin/maglev -f config.json
 
 build: gtfstidy
-	go build -gcflags "all=-N -l" -o bin/maglev ./cmd/api
+	go build -tags "fts5" -gcflags "all=-N -l" -o bin/maglev ./cmd/api
 
 gtfstidy:
 	go build -o bin/gtfstidy github.com/patrickbr/gtfstidy
@@ -15,7 +15,7 @@ clean:
 	rm -f coverage.out
 
 coverage:
-	go test -coverprofile=coverage.out ./...
+	go test -tags "fts5" -coverprofile=coverage.out ./...
 	go tool cover -html=coverage.out
 
 check-golangci-lint:
@@ -28,7 +28,7 @@ fmt:
 	go fmt ./...
 
 test:
-	go test ./...
+	go test -tags "fts5" ./...
 
 models:
 	go tool sqlc generate -f gtfsdb/sqlc.yml

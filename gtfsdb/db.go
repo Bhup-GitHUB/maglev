@@ -234,6 +234,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.upsertImportMetadataStmt, err = db.PrepareContext(ctx, upsertImportMetadata); err != nil {
 		return nil, fmt.Errorf("error preparing query UpsertImportMetadata: %w", err)
 	}
+	if q.searchRoutesByNameStmt, err = db.PrepareContext(ctx, searchRoutesByName); err != nil {
+		return nil, fmt.Errorf("error preparing query SearchRoutesByName: %w", err)
+	}
 	return &q, nil
 }
 
@@ -589,6 +592,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing upsertImportMetadataStmt: %w", cerr)
 		}
 	}
+	if q.searchRoutesByNameStmt != nil {
+		if cerr := q.searchRoutesByNameStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing searchRoutesByNameStmt: %w", cerr)
+		}
+	}
 	return err
 }
 
@@ -698,6 +706,7 @@ type Queries struct {
 	listTripsStmt                             *sql.Stmt
 	updateStopDirectionStmt                   *sql.Stmt
 	upsertImportMetadataStmt                  *sql.Stmt
+	searchRoutesByNameStmt                    *sql.Stmt
 }
 
 func (q *Queries) WithTx(tx *sql.Tx) *Queries {
@@ -774,5 +783,6 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		listTripsStmt:                             q.listTripsStmt,
 		updateStopDirectionStmt:                   q.updateStopDirectionStmt,
 		upsertImportMetadataStmt:                  q.upsertImportMetadataStmt,
+		searchRoutesByNameStmt:                    q.searchRoutesByNameStmt,
 	}
 }

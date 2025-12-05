@@ -772,3 +772,11 @@ SELECT lat, lon, shape_pt_sequence, shape_dist_traveled
 FROM shapes
 WHERE shape_id = ?
 ORDER BY shape_pt_sequence;
+
+-- name: SearchRoutesByName :many
+SELECT r.*
+FROM routes r
+JOIN routes_fts fts ON r.id = fts.id
+WHERE routes_fts MATCH @search_term
+ORDER BY bm25(routes_fts)
+LIMIT @max_count;

@@ -3018,3 +3018,52 @@ func (q *Queries) UpsertImportMetadata(ctx context.Context, arg UpsertImportMeta
 	)
 	return i, err
 }
+
+const searchRoutesByName = `-- name: SearchRoutesByName :many
+SELECT r.id, r.agency_id, r.short_name, r.long_name, r."desc", r.type, r.url, r.color, r.text_color, r.continuous_pickup, r.continuous_drop_off
+FROM routes r
+JOIN routes_fts fts ON r.id = fts.id
+WHERE routes_fts MATCH ?
+ORDER BY bm25(routes_fts)
+LIMIT ?
+`
+
+type SearchRoutesByNameParams struct {
+	SearchTerm string
+	MaxCount   int64
+}
+
+func (q *Queries) SearchRoutesByName(ctx context.Context, arg SearchRoutesByNameParams) ([]Route, error) {
+	rows, err := q.query(ctx, q.searchRoutesByNameStmt, searchRoutesByName, arg.SearchTerm, arg.MaxCount)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Route
+	for rows.Next() {
+		var i Route
+		if err := rows.Scan(
+			&i.ID,
+			&i.AgencyID,
+			&i.ShortName,
+			&i.LongName,
+			&i.Desc,
+			&i.Type,
+			&i.Url,
+			&i.Color,
+			&i.TextColor,
+			&i.ContinuousPickup,
+			&i.ContinuousDropOff,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
