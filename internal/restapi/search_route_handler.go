@@ -1,8 +1,11 @@
 package restapi
 
 import (
+	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"maglev.onebusaway.org/gtfsdb"
 	"maglev.onebusaway.org/internal/models"
@@ -15,9 +18,11 @@ func (api *RestAPI) searchRouteHandler(w http.ResponseWriter, r *http.Request) {
 	queryParams := r.URL.Query()
 
 	input := queryParams.Get("input")
-	if input == "" {
+	// Validate and sanitize input to avoid FTS syntax errors and injection
+	searchTerm, err := buildRouteSearchTerm(input)
+	if err != nil {
 		fieldErrors := map[string][]string{
-			"input": {"input parameter is required"},
+			"input": {err.Error()},
 		}
 		api.validationErrorResponse(w, r, fieldErrors)
 		return
@@ -34,6 +39,13 @@ func (api *RestAPI) searchRouteHandler(w http.ResponseWriter, r *http.Request) {
 			api.validationErrorResponse(w, r, fieldErrors)
 			return
 		}
+		if parsed > defaultMaxCount {
+			fieldErrors := map[string][]string{
+				"maxCount": {fmt.Sprintf("maxCount must not exceed %d", defaultMaxCount)},
+			}
+			api.validationErrorResponse(w, r, fieldErrors)
+			return
+		}
 		maxCount = parsed
 	}
 
@@ -44,14 +56,18 @@ func (api *RestAPI) searchRouteHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	searchTerm := input + "*"
 	routes, err := api.GtfsManager.GtfsDB.Queries.SearchRoutesByName(ctx, gtfsdb.SearchRoutesByNameParams{
 		SearchTerm: searchTerm,
-		MaxCount:   maxCount,
+		MaxCount:   maxCount + 1, // fetch one extra to detect truncation
 	})
 	if err != nil {
 		api.serverErrorResponse(w, r, err)
 		return
+	}
+
+	limitExceeded := int64(len(routes)) > maxCount
+	if limitExceeded {
+		routes = routes[:maxCount]
 	}
 
 	routesList := make([]models.Route, 0, len(routes))
@@ -84,6 +100,55 @@ func (api *RestAPI) searchRouteHandler(w http.ResponseWriter, r *http.Request) {
 		Trips:      []interface{}{},
 	}
 
-	response := models.NewListResponse(routesList, references)
+	response := models.NewOKResponse(map[string]interface{}{
+		"limitExceeded": limitExceeded,
+		"list":          routesList,
+		"references":    references,
+	})
 	api.sendResponse(w, r, response)
+}
+
+// buildRouteSearchTerm sanitizes input and converts it into a safe FTS5 MATCH query.
+// We quote each term and add a trailing wildcard for prefix search, joining multiple
+// terms with AND to approximate the upstream behavior while avoiding operator injection.
+func buildRouteSearchTerm(input string) (string, error) {
+	if strings.TrimSpace(input) == "" {
+		return "", errors.New("input parameter is required")
+	}
+
+	sanitized, err := utils.ValidateAndSanitizeQuery(input)
+	if err != nil {
+		return "", err
+	}
+
+	terms := strings.Fields(sanitized)
+	if len(terms) == 0 {
+		return "", errors.New("input parameter is required")
+	}
+
+	escaped := make([]string, 0, len(terms))
+	for _, term := range terms {
+		// Drop quotes that would break MATCH syntax
+		clean := strings.Map(func(r rune) rune {
+			switch r {
+			case '"', '\'':
+				return -1
+			default:
+				return r
+			}
+		}, term)
+
+		clean = strings.TrimSpace(clean)
+		if clean == "" {
+			continue
+		}
+
+		escaped = append(escaped, fmt.Sprintf("\"%s\"*", clean))
+	}
+
+	if len(escaped) == 0 {
+		return "", errors.New("input parameter is required")
+	}
+
+	return strings.Join(escaped, " AND "), nil
 }

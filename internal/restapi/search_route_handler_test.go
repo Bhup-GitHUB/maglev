@@ -57,6 +57,7 @@ func TestSearchRouteHandlerInvalidMaxCount(t *testing.T) {
 		{"negative", "-5"},
 		{"zero", "0"},
 		{"float", "3.5"},
+		{"too-large", "999"},
 	}
 
 	for _, tc := range testCases {
@@ -81,7 +82,11 @@ func TestSearchRouteHandlerInvalidMaxCount(t *testing.T) {
 
 			assert.Contains(t, errorResponse.FieldErrors, "maxCount")
 			assert.Len(t, errorResponse.FieldErrors["maxCount"], 1)
-			assert.Equal(t, "maxCount must be a positive integer", errorResponse.FieldErrors["maxCount"][0])
+			if tc.name == "too-large" {
+				assert.Contains(t, errorResponse.FieldErrors["maxCount"][0], "must not exceed")
+			} else {
+				assert.Equal(t, "maxCount must be a positive integer", errorResponse.FieldErrors["maxCount"][0])
+			}
 		})
 	}
 }
@@ -154,16 +159,14 @@ func TestSearchRouteHandlerSuccessfulSearch(t *testing.T) {
 	// Should have list (may or may not have results depending on FTS index)
 	list, ok := data["list"].([]interface{})
 	require.True(t, ok)
+	require.NotEmpty(t, list, "search should return at least one route from test data")
 
-	// If we got results, verify structure
-	if len(list) > 0 {
-		route := list[0].(map[string]interface{})
-		assert.NotEmpty(t, route["id"])
-		assert.NotEmpty(t, route["agencyId"])
-		// type should be a number
-		_, ok = route["type"].(float64)
-		assert.True(t, ok, "type should be a number")
-	}
+	route := list[0].(map[string]interface{})
+	assert.NotEmpty(t, route["id"])
+	assert.NotEmpty(t, route["agencyId"])
+	// type should be a number
+	_, ok = route["type"].(float64)
+	assert.True(t, ok, "type should be a number")
 
 	// Check references structure
 	refs, ok := data["references"].(map[string]interface{})
@@ -187,6 +190,12 @@ func TestSearchRouteHandlerMaxCountLimitsResults(t *testing.T) {
 	require.True(t, ok)
 	// Should be at most 1 result
 	assert.LessOrEqual(t, len(list), 1)
+
+	limitExceeded, ok := data["limitExceeded"].(bool)
+	require.True(t, ok)
+	if len(list) == 1 {
+		assert.True(t, limitExceeded, "limitExceeded should be true when results are truncated")
+	}
 }
 
 func TestSearchRouteHandlerResponseStructure(t *testing.T) {

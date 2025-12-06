@@ -242,3 +242,8 @@ VALUES
     (new.rowid, new.id, new.short_name, new.long_name);
 
 END;
+
+-- migrate
+-- Rebuild routes_fts to backfill existing route records (idempotent)
+INSERT INTO routes_fts(routes_fts)
+VALUES ('rebuild');
