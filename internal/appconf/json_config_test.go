@@ -158,10 +158,11 @@ func TestValidate_DuplicateApiKeys(t *testing.T) {
 
 func TestToAppConfig(t *testing.T) {
 	jsonConfig := &JSONConfig{
-		Port:      8080,
-		Env:       "production",
-		ApiKeys:   []string{"key1", "key2"},
-		RateLimit: 50,
+		Port:          8080,
+		Env:           "production",
+		ApiKeys:       []string{"key1", "key2"},
+		RateLimit:     50,
+		ExemptApiKeys: []string{"exempt-key-1"},
 	}
 
 	appConfig := jsonConfig.ToAppConfig()
@@ -171,6 +172,7 @@ func TestToAppConfig(t *testing.T) {
 	assert.Equal(t, []string{"key1", "key2"}, appConfig.ApiKeys)
 	assert.Equal(t, 50, appConfig.RateLimit)
 	assert.True(t, appConfig.Verbose)
+	assert.Equal(t, []string{"exempt-key-1"}, appConfig.ExemptApiKeys)
 }
 
 func TestToAppConfig_EnvironmentConversion(t *testing.T) {
@@ -274,6 +276,7 @@ func TestSetDefaults(t *testing.T) {
 	assert.Equal(t, "./gtfs.db", config.DataPath)
 	assert.Len(t, config.GtfsRtFeeds, 1)
 	assert.Equal(t, "https://api.pugetsound.onebusaway.org/api/gtfs_realtime/trip-updates-for-agency/40.pb?key=org.onebusaway.iphone", config.GtfsRtFeeds[0].TripUpdatesURL)
+	assert.Equal(t, []string{"org.onebusaway.iphone"}, config.ExemptApiKeys)
 }
 
 func TestSetDefaults_PartialConfig(t *testing.T) {
