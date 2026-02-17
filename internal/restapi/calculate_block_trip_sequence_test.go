@@ -2,6 +2,8 @@ package restapi
 
 import (
 	"context"
+	"math"
+	"sort"
 	"testing"
 	"time"
 
@@ -14,14 +16,17 @@ func TestCalculateBlockTripSequence(t *testing.T) {
 	defer api.Shutdown()
 	ctx := context.Background()
 
+	api.GtfsManager.RLock()
+	defer api.GtfsManager.RUnlock()
+
 	trips := api.GtfsManager.GetTrips()
 	require.NotEmpty(t, trips, "Should have test trips")
 
+	// Monday within the RABA dataset's active service period (calendar range covers this date)
 	serviceDate := time.Date(2024, 11, 4, 0, 0, 0, 0, time.UTC)
 
 	// Find a block that has multiple active trips so we can verify sequencing
 	type blockInfo struct {
-		blockID string
 		tripIDs []string
 	}
 	blocks := make(map[string]*blockInfo)
@@ -39,7 +44,7 @@ func TestCalculateBlockTripSequence(t *testing.T) {
 
 		bid := tripRow.BlockID.String
 		if blocks[bid] == nil {
-			blocks[bid] = &blockInfo{blockID: bid}
+			blocks[bid] = &blockInfo{}
 		}
 		blocks[bid].tripIDs = append(blocks[bid].tripIDs, trip.ID)
 	}
@@ -54,6 +59,7 @@ func TestCalculateBlockTripSequence(t *testing.T) {
 	}
 
 	require.NotNil(t, multiTripBlock, "Need a block with multiple active trips in test data")
+	t.Logf("Selected block with %d trips: %v", len(multiTripBlock.tripIDs), multiTripBlock.tripIDs)
 
 	t.Run("trips in same block get different sequences", func(t *testing.T) {
 		sequences := make(map[int]bool)
@@ -83,5 +89,31 @@ func TestCalculateBlockTripSequence(t *testing.T) {
 		futureDate := time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)
 		sequence := api.calculateBlockTripSequence(ctx, multiTripBlock.tripIDs[0], futureDate)
 		assert.Equal(t, 0, sequence)
+	})
+
+	t.Run("sequence order matches chronological departure time", func(t *testing.T) {
+		type tripSeq struct {
+			sequence       int
+			earliestDepart int64
+		}
+		var results []tripSeq
+		for _, tripID := range multiTripBlock.tripIDs {
+			seq := api.calculateBlockTripSequence(ctx, tripID, serviceDate)
+			stopTimes, err := api.GtfsManager.GtfsDB.Queries.GetStopTimesForTrip(ctx, tripID)
+			require.NoError(t, err)
+			var minDepart int64 = math.MaxInt64
+			for _, st := range stopTimes {
+				if st.DepartureTime > 0 && st.DepartureTime < minDepart {
+					minDepart = st.DepartureTime
+				}
+			}
+			results = append(results, tripSeq{sequence: seq, earliestDepart: minDepart})
+		}
+		sort.Slice(results, func(i, j int) bool {
+			return results[i].sequence < results[j].sequence
+		})
+		for i := 1; i < len(results); i++ {
+			assert.LessOrEqual(t, results[i-1].earliestDepart, results[i].earliestDepart)
+		}
 	})
 }
