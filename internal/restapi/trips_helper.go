@@ -496,9 +496,12 @@ func (api *RestAPI) calculateBlockTripSequence(ctx context.Context, tripID strin
 		}
 	}
 
-	// Third, sort trips by start time
+	// Third, sort trips by start time, then by trip ID for deterministic ordering
 	sort.Slice(activeTrips, func(i, j int) bool {
-		return activeTrips[i].StartTime < activeTrips[j].StartTime
+		if activeTrips[i].StartTime != activeTrips[j].StartTime {
+			return activeTrips[i].StartTime < activeTrips[j].StartTime
+		}
+		return activeTrips[i].TripID < activeTrips[j].TripID
 	})
 
 	for i, trip := range activeTrips {
