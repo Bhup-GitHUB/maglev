@@ -744,7 +744,7 @@ WHERE
 ORDER BY
     st.arrival_time LIMIT 50;
 -- name: GetTripsByServiceID :many
-SELECT *
+SELECT id, route_id, service_id, trip_headsign
 FROM trips
 WHERE service_id IN (sqlc.slice('service_ids'));
 
@@ -958,7 +958,8 @@ WHERE bte.block_trip_index_id IN (sqlc.slice('index_ids'))
 
 
 -- name: GetShapePointsByIDs :many
-SELECT * FROM shapes
+SELECT shape_id, lat, lon, shape_pt_sequence, shape_dist_traveled
+FROM shapes
 WHERE shape_id IN (sqlc.slice('shape_ids'))
 ORDER BY shape_id, shape_pt_sequence;
 

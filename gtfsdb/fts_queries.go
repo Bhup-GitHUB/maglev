@@ -4,8 +4,8 @@ package gtfsdb
 // sqlc cannot handle queries that use FTS5-specific syntax (MATCH operator,
 // bm25() function), so these are maintained manually instead of in query.sql.
 //
-// IMPORTANT: If the 'routes' or 'stops' table schema changes, the SQL
-// and Go types in this file must be updated manually to match.
+// IMPORTANT: If the 'routes', 'stops', 'routes_fts', or 'stops_fts' table schemas change,
+// the SQL and Go types in this file must be updated manually to match.
 // Running 'make models' will NOT update this file.
 
 import (

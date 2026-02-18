@@ -63,8 +63,8 @@ func (c *Client) TableCounts() (map[string]int, error) {
 	defer logging.SafeCloseWithLogging(rows,
 		slog.Default().With(slog.String("component", "debugging")),
 		"database_rows")
-	var tables []string
 
+	var tables []string
 	for rows.Next() {
 		var tableName string
 		if err := rows.Scan(&tableName); err != nil {
@@ -75,30 +75,29 @@ func (c *Client) TableCounts() (map[string]int, error) {
 
 	counts := make(map[string]int)
 
-	// Whitelist allowed table names to prevent SQL injection
-	allowedTables := map[string]bool{
-		"agencies":         true,
-		"routes":           true,
-		"stops":            true,
-		"trips":            true,
-		"stop_times":       true,
-		"calendar":         true,
-		"calendar_dates":   true,
-		"shapes":           true,
-		"transfers":        true,
-		"feed_info":        true,
-		"block_trip_index": true,
-		"block_trip_entry": true,
-		"import_metadata":  true,
+	tableCountQueries := map[string]string{
+		"agencies":         "SELECT COUNT(*) FROM agencies",
+		"routes":           "SELECT COUNT(*) FROM routes",
+		"stops":            "SELECT COUNT(*) FROM stops",
+		"trips":            "SELECT COUNT(*) FROM trips",
+		"stop_times":       "SELECT COUNT(*) FROM stop_times",
+		"calendar":         "SELECT COUNT(*) FROM calendar",
+		"calendar_dates":   "SELECT COUNT(*) FROM calendar_dates",
+		"shapes":           "SELECT COUNT(*) FROM shapes",
+		"transfers":        "SELECT COUNT(*) FROM transfers",
+		"feed_info":        "SELECT COUNT(*) FROM feed_info",
+		"block_trip_index": "SELECT COUNT(*) FROM block_trip_index",
+		"block_trip_entry": "SELECT COUNT(*) FROM block_trip_entry",
+		"import_metadata":  "SELECT COUNT(*) FROM import_metadata",
 	}
 
 	for _, table := range tables {
-		if !allowedTables[table] {
+		query, ok := tableCountQueries[table]
+		if !ok {
 			continue
 		}
 
 		var count int
-		query := fmt.Sprintf("SELECT COUNT(*) FROM %s", table)
 		err := c.DB.QueryRow(query).Scan(&count)
 		if err != nil {
 			return nil, err

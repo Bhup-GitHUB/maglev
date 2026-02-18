@@ -56,10 +56,13 @@ func rawGtfsData(source string, isLocalFile bool, config Config) ([]byte, error)
 		if resp.StatusCode != http.StatusOK {
 			return nil, fmt.Errorf("failed to download GTFS data: received HTTP status %s", resp.Status)
 		}
-
-		b, err = io.ReadAll(resp.Body)
+		const maxStaticSize = 200 * 1024 * 1024
+		b, err = io.ReadAll(io.LimitReader(resp.Body, maxStaticSize+1))
 		if err != nil {
 			return nil, fmt.Errorf("error reading GTFS data: %w", err)
+		}
+		if int64(len(b)) > maxStaticSize {
+			return nil, fmt.Errorf("static GTFS response exceeds size limit of %d bytes", maxStaticSize)
 		}
 	}
 
@@ -300,6 +303,7 @@ func (manager *Manager) ForceUpdate(ctx context.Context) error {
 
 	manager.gtfsData = newStaticData
 	manager.GtfsDB = client
+	manager.agenciesMap, manager.routesMap = buildLookupMaps(newStaticData)
 	manager.blockLayoverIndices = newBlockLayoverIndices
 	manager.stopSpatialIndex = newStopSpatialIndex
 	manager.lastUpdated = time.Now()
@@ -321,6 +325,9 @@ func (manager *Manager) setStaticGTFS(staticData *gtfs.Static) {
 	manager.gtfsData = staticData
 	manager.lastUpdated = time.Now()
 	manager.isHealthy = true
+
+	manager.agenciesMap, manager.routesMap = buildLookupMaps(staticData)
+
 	manager.blockLayoverIndices = buildBlockLayoverIndices(staticData)
 
 	// Rebuild spatial index with updated data
@@ -341,4 +348,18 @@ func (manager *Manager) setStaticGTFS(staticData *gtfs.Static) {
 			slog.String("source", manager.config.GtfsURL),
 			slog.Int("layover_indices_built", len(manager.blockLayoverIndices)))
 	}
+}
+
+// buildLookupMaps is used to create O(1) lookup maps for agencies and routes
+func buildLookupMaps(data *gtfs.Static) (map[string]*gtfs.Agency, map[string]*gtfs.Route) {
+	agencies := make(map[string]*gtfs.Agency, len(data.Agencies))
+	for i := range data.Agencies {
+		agencies[data.Agencies[i].Id] = &data.Agencies[i]
+	}
+
+	routes := make(map[string]*gtfs.Route, len(data.Routes))
+	for i := range data.Routes {
+		routes[data.Routes[i].Id] = &data.Routes[i]
+	}
+	return agencies, routes
 }

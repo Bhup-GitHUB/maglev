@@ -2130,12 +2130,21 @@ func (q *Queries) GetShapePointWindow(ctx context.Context, shapeID string) ([]Ge
 }
 
 const getShapePointsByIDs = `-- name: GetShapePointsByIDs :many
-SELECT id, shape_id, lat, lon, shape_pt_sequence, shape_dist_traveled FROM shapes
+SELECT shape_id, lat, lon, shape_pt_sequence, shape_dist_traveled
+FROM shapes
 WHERE shape_id IN (/*SLICE:shape_ids*/?)
 ORDER BY shape_id, shape_pt_sequence
 `
 
-func (q *Queries) GetShapePointsByIDs(ctx context.Context, shapeIds []string) ([]Shape, error) {
+type GetShapePointsByIDsRow struct {
+	ShapeID           string
+	Lat               float64
+	Lon               float64
+	ShapePtSequence   int64
+	ShapeDistTraveled sql.NullFloat64
+}
+
+func (q *Queries) GetShapePointsByIDs(ctx context.Context, shapeIds []string) ([]GetShapePointsByIDsRow, error) {
 	query := getShapePointsByIDs
 	var queryParams []interface{}
 	if len(shapeIds) > 0 {
@@ -2151,11 +2160,10 @@ func (q *Queries) GetShapePointsByIDs(ctx context.Context, shapeIds []string) ([
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Shape
+	var items []GetShapePointsByIDsRow
 	for rows.Next() {
-		var i Shape
+		var i GetShapePointsByIDsRow
 		if err := rows.Scan(
-			&i.ID,
 			&i.ShapeID,
 			&i.Lat,
 			&i.Lon,
@@ -3497,12 +3505,19 @@ func (q *Queries) GetTripsByIDs(ctx context.Context, tripIds []string) ([]Trip, 
 }
 
 const getTripsByServiceID = `-- name: GetTripsByServiceID :many
-SELECT id, route_id, service_id, trip_headsign, trip_short_name, direction_id, block_id, shape_id, wheelchair_accessible, bikes_allowed
+SELECT id, route_id, service_id, trip_headsign
 FROM trips
 WHERE service_id IN (/*SLICE:service_ids*/?)
 `
 
-func (q *Queries) GetTripsByServiceID(ctx context.Context, serviceIds []string) ([]Trip, error) {
+type GetTripsByServiceIDRow struct {
+	ID           string
+	RouteID      string
+	ServiceID    string
+	TripHeadsign sql.NullString
+}
+
+func (q *Queries) GetTripsByServiceID(ctx context.Context, serviceIds []string) ([]GetTripsByServiceIDRow, error) {
 	query := getTripsByServiceID
 	var queryParams []interface{}
 	if len(serviceIds) > 0 {
@@ -3518,20 +3533,14 @@ func (q *Queries) GetTripsByServiceID(ctx context.Context, serviceIds []string) 
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Trip
+	var items []GetTripsByServiceIDRow
 	for rows.Next() {
-		var i Trip
+		var i GetTripsByServiceIDRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.RouteID,
 			&i.ServiceID,
 			&i.TripHeadsign,
-			&i.TripShortName,
-			&i.DirectionID,
-			&i.BlockID,
-			&i.ShapeID,
-			&i.WheelchairAccessible,
-			&i.BikesAllowed,
 		); err != nil {
 			return nil, err
 		}
